@@ -1,6 +1,7 @@
 package com.example;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
@@ -21,28 +22,45 @@ public class Agent {
 
   public void execute(AgentCommand command) {
 
-    validator.validate(command);
+    try {
 
-    switch (command.action()) {
+      validator.validate(command);
 
-      case LIST:
-        listFiles();
-        break;
+      switch (command.action()) {
 
-      case READ:
-        readFile(command.source());
-        break;
+        case LIST:
+          listFiles();
+          break;
 
-      case MOVE:
-        moveFile(
-            command.source(),
-            command.destination()
-        );
-        break;
+        case READ:
+          readFile(command.source());
+          break;
 
-      case CREATE_DIRECTORY:
-        createDirectory(command.source());
-        break;
+        case MOVE:
+          moveFile(
+              command.source(),
+              command.destination()
+          );
+          break;
+
+        case MOVE_MATCHING:
+          moveMatching(
+              command.source(),
+              command.destination()
+          );
+          break;
+
+        case CREATE_DIRECTORY:
+          createDirectory(command.source());
+          break;
+      }
+
+    } catch (IllegalArgumentException e) {
+
+      log.warn(
+          "Command rejected: {}",
+          e.getMessage()
+      );
     }
   }
 
@@ -67,12 +85,24 @@ public class Agent {
 
     try {
 
-      String content = fileManager.readFile(fileName);
+      if (!fileManager.fileExists(fileName)) {
+
+        log.warn(
+            "File does not exist: {}",
+            fileName
+        );
+
+        return;
+      }
+
+      String content =
+          fileManager.readFile(fileName);
 
       log.info("Content of {}:", fileName);
       log.info(content);
 
     } catch (IOException e) {
+
       log.error(
           "Cannot read file: {}",
           fileName,
@@ -87,6 +117,16 @@ public class Agent {
   ) {
 
     try {
+
+      if (!fileManager.fileExists(source)) {
+
+        log.warn(
+            "Source file does not exist: {}",
+            source
+        );
+
+        return;
+      }
 
       fileManager.moveFile(
           source,
@@ -126,6 +166,65 @@ public class Agent {
       log.error(
           "Cannot create directory: {}",
           directoryName,
+          e
+      );
+    }
+  }
+  private void moveMatching(
+      String pattern,
+      String destination
+  ) {
+
+    try {
+
+      List<Path> files =
+          fileManager.findFiles(pattern);
+
+      if (files.isEmpty()) {
+
+        log.info(
+            "No files found for pattern: {}",
+            pattern
+        );
+
+        return;
+      }
+
+      if (!fileManager.directoryExists(destination)) {
+
+        fileManager.createDirectory(destination);
+
+        log.info(
+            "Directory created: {}",
+            destination
+        );
+      }
+
+      for (Path file : files) {
+
+        String fileName =
+            file.getFileName().toString();
+
+        String destinationPath =
+            destination + "/" + fileName;
+
+        fileManager.moveFile(
+            fileName,
+            destinationPath
+        );
+
+        log.info(
+            "File moved: {} -> {}",
+            fileName,
+            destinationPath
+        );
+      }
+
+    } catch (IOException e) {
+
+      log.error(
+          "Cannot move files matching: {}",
+          pattern,
           e
       );
     }

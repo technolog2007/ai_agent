@@ -92,4 +92,46 @@ public class FileManager {
 
     Files.createDirectories(directoryPath);
   }
+  public List<Path> findFiles(String pattern) throws IOException {
+
+    try (Stream<Path> stream = Files.list(allowedFolder)) {
+
+      return stream
+          .filter(Files::isRegularFile)
+          .filter(path -> matchesPattern(
+              path.getFileName().toString(),
+              pattern
+          ))
+          .toList();
+    }
+  }
+  private boolean matchesPattern(
+      String fileName,
+      String pattern
+  ) {
+
+    if (pattern.equals("*")) {
+      return true;
+    }
+
+    if (pattern.startsWith("*")) {
+
+      String extension =
+          pattern.substring(1);
+
+      return fileName.endsWith(extension);
+    }
+
+    return fileName.equals(pattern);
+  }
+
+  public boolean directoryExists(
+      String directoryName
+  ) {
+
+    Path directoryPath =
+        getSafePath(directoryName);
+
+    return Files.isDirectory(directoryPath);
+  }
 }

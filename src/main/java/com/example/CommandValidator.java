@@ -30,6 +30,10 @@ public class CommandValidator {
         validateMove(command);
         break;
 
+      case MOVE_MATCHING:
+        validateMoveMatching(command);
+        break;
+
       case CREATE_DIRECTORY:
         validateCreateDirectory(command);
         break;
@@ -77,11 +81,30 @@ public class CommandValidator {
     }
   }
 
-  private void validateCreateDirectory(AgentCommand command) {
+  private void validateMoveMatching(
+      AgentCommand command
+  ) {
 
     if (isBlank(command.source())) {
       throw new IllegalArgumentException(
-          "CREATE_DIRECTORY command requires source"
+          "MOVE_MATCHING command requires pattern"
+      );
+    }
+
+    if (isBlank(command.destination())) {
+      throw new IllegalArgumentException(
+          "MOVE_MATCHING command requires destination"
+      );
+    }
+  }
+
+  private void validateCreateDirectory(
+      AgentCommand command
+  ) {
+
+    if (isBlank(command.source())) {
+      throw new IllegalArgumentException(
+          "CREATE_DIRECTORY command requires directory"
       );
     }
 
