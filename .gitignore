@@ -1,0 +1,15 @@
+target/
+.idea/
+*.iml
+out/
+
+*.class
+
+.env
+app.properties
+
+# Ігноруємо лог-файли
+*.log
+
+# Ігноруємо файли конфігів, які не хочеш шарити
+config/
