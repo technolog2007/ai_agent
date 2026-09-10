@@ -118,25 +118,33 @@ public class Agent {
 
     try {
 
-      if (!fileManager.fileExists(source)) {
+      if (!fileManager.directoryExists(destination)) {
 
-        log.warn(
-            "Source file does not exist: {}",
-            source
+        fileManager.createDirectory(destination);
+
+        log.info(
+            "Directory created: {}",
+            destination
         );
-
-        return;
       }
+
+      String fileName =
+          Path.of(source)
+              .getFileName()
+              .toString();
+
+      String destinationPath =
+          destination + "/" + fileName;
 
       fileManager.moveFile(
           source,
-          destination
+          destinationPath
       );
 
       log.info(
           "File moved: {} -> {}",
           source,
-          destination
+          destinationPath
       );
 
     } catch (IOException e) {
@@ -170,6 +178,7 @@ public class Agent {
       );
     }
   }
+
   private void moveMatching(
       String pattern,
       String destination

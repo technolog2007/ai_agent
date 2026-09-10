@@ -27,29 +27,21 @@ public final class App {
             validator
         );
 
-    CommandParser parser =
-        new CommandParser();
+    LlmClient llmClient =
+        new LlmClient();
+
+    LlmCommandParser commandParser =
+        new LlmCommandParser();
 
     Scanner scanner =
         new Scanner(System.in);
-
-    System.out.println();
-    System.out.println("Local File Agent");
-    System.out.println("Allowed folder: " + allowedFolder);
-    System.out.println();
-    System.out.println("Available commands:");
-    System.out.println("  list");
-    System.out.println("  read <file>");
-    System.out.println("  mkdir <directory>");
-    System.out.println("  move <source> <destination>");
-    System.out.println("  exit");
-    System.out.println();
 
     while (true) {
 
       System.out.print("> ");
 
-      String input = scanner.nextLine();
+      String input =
+          scanner.nextLine();
 
       if (input.equalsIgnoreCase("exit")) {
         break;
@@ -57,15 +49,31 @@ public final class App {
 
       try {
 
+        String llmResponse =
+            llmClient.ask(input);
+
+        log.info(
+            "LLM response: {}",
+            llmResponse
+        );
+
         AgentCommand command =
-            parser.parse(input);
+            commandParser.parse(
+                llmResponse
+            );
+
+        log.info(
+            "Command: {}",
+            command
+        );
 
         agent.execute(command);
 
-      } catch (IllegalArgumentException e) {
+      } catch (Exception e) {
 
-        System.out.println(
-            "Command error: " + e.getMessage()
+        log.error(
+            "Cannot process command",
+            e
         );
       }
     }

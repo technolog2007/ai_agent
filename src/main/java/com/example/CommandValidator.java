@@ -37,6 +37,11 @@ public class CommandValidator {
       case CREATE_DIRECTORY:
         validateCreateDirectory(command);
         break;
+
+      case UNKNOWN:
+        throw new IllegalArgumentException(
+            "Unknown or unsupported command"
+        );
     }
   }
 

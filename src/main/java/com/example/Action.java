@@ -5,5 +5,6 @@ public enum Action {
   READ,
   MOVE,
   MOVE_MATCHING,
-  CREATE_DIRECTORY
+  CREATE_DIRECTORY,
+  UNKNOWN
 }
