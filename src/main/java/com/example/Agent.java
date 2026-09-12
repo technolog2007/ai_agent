@@ -1,7 +1,6 @@
 package com.example;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
@@ -20,7 +19,9 @@ public class Agent {
     this.validator = validator;
   }
 
-  public void execute(AgentCommand command) {
+  public AgentResult execute(
+      AgentCommand command
+  ) {
 
     try {
 
@@ -29,30 +30,35 @@ public class Agent {
       switch (command.action()) {
 
         case LIST:
-          listFiles();
-          break;
+          return listFiles();
 
         case READ:
-          readFile(command.source());
-          break;
+          return readFile(
+              command.source()
+          );
 
         case MOVE:
-          moveFile(
+          return moveFile(
               command.source(),
               command.destination()
           );
-          break;
 
         case MOVE_MATCHING:
-          moveMatching(
+          return moveMatching(
               command.source(),
               command.destination()
           );
-          break;
 
         case CREATE_DIRECTORY:
-          createDirectory(command.source());
-          break;
+          return createDirectory(
+              command.source()
+          );
+
+        case UNKNOWN:
+          return new AgentResult(
+              false,
+              "Unknown command"
+          );
       }
 
     } catch (IllegalArgumentException e) {
@@ -61,45 +67,76 @@ public class Agent {
           "Command rejected: {}",
           e.getMessage()
       );
+
+      return new AgentResult(
+          false,
+          e.getMessage()
+      );
     }
+
+    return new AgentResult(
+        false,
+        "Command execution failed"
+    );
   }
 
-  private void listFiles() {
+  private AgentResult listFiles() {
 
     try {
 
-      List<Path> files = fileManager.listFiles();
+      List<Path> files =
+          fileManager.listFiles();
 
       log.info("Files:");
 
       for (Path file : files) {
-        log.info(" - {}", file.getFileName());
+
+        log.info(
+            " - {}",
+            file.getFileName()
+        );
       }
 
+      return new AgentResult(
+          true,
+          "Files listed successfully"
+      );
+
     } catch (IOException e) {
-      log.error("Cannot list files", e);
+
+      log.error(
+          "Cannot list files",
+          e
+      );
+
+      return new AgentResult(
+          false,
+          "Cannot list files"
+      );
     }
   }
 
-  private void readFile(String fileName) {
+  private AgentResult readFile(
+      String fileName
+  ) {
 
     try {
-
-      if (!fileManager.fileExists(fileName)) {
-
-        log.warn(
-            "File does not exist: {}",
-            fileName
-        );
-
-        return;
-      }
 
       String content =
           fileManager.readFile(fileName);
 
-      log.info("Content of {}:", fileName);
+      log.info(
+          "Content of {}:",
+          fileName
+      );
+
       log.info(content);
+
+      return new AgentResult(
+          true,
+          "File read successfully: "
+              + fileName
+      );
 
     } catch (IOException e) {
 
@@ -108,19 +145,33 @@ public class Agent {
           fileName,
           e
       );
+
+      return new AgentResult(
+          false,
+          "Cannot read file: "
+              + fileName
+      );
     }
   }
 
-  private void moveFile(
+  private AgentResult moveFile(
       String source,
       String destination
   ) {
 
     try {
 
-      if (!fileManager.directoryExists(destination)) {
+      /*
+       * destination is a directory.
+       * If it does not exist, create it.
+       */
+      if (!fileManager.directoryExists(
+          destination
+      )) {
 
-        fileManager.createDirectory(destination);
+        fileManager.createDirectory(
+            destination
+        );
 
         log.info(
             "Directory created: {}",
@@ -128,11 +179,31 @@ public class Agent {
         );
       }
 
+      /*
+       * Extract the file name from source.
+       *
+       * Example:
+       *
+       * source = "test.txt"
+       * fileName = "test.txt"
+       *
+       * source = "folder/test.txt"
+       * fileName = "test.txt"
+       */
       String fileName =
           Path.of(source)
               .getFileName()
               .toString();
 
+      /*
+       * Build destination path.
+       *
+       * destination = "Documents"
+       * fileName = "test.txt"
+       *
+       * result:
+       * Documents/test.txt
+       */
       String destinationPath =
           destination + "/" + fileName;
 
@@ -147,6 +218,14 @@ public class Agent {
           destinationPath
       );
 
+      return new AgentResult(
+          true,
+          "File moved: "
+              + source
+              + " -> "
+              + destinationPath
+      );
+
     } catch (IOException e) {
 
       log.error(
@@ -155,31 +234,18 @@ public class Agent {
           destination,
           e
       );
-    }
-  }
 
-  private void createDirectory(String directoryName) {
-
-    try {
-
-      fileManager.createDirectory(directoryName);
-
-      log.info(
-          "Directory created: {}",
-          directoryName
-      );
-
-    } catch (IOException e) {
-
-      log.error(
-          "Cannot create directory: {}",
-          directoryName,
-          e
+      return new AgentResult(
+          false,
+          "Cannot move file: "
+              + source
+              + " -> "
+              + destination
       );
     }
   }
 
-  private void moveMatching(
+  private AgentResult moveMatching(
       String pattern,
       String destination
   ) {
@@ -196,12 +262,24 @@ public class Agent {
             pattern
         );
 
-        return;
+        return new AgentResult(
+            true,
+            "No files found for pattern: "
+                + pattern
+        );
       }
 
-      if (!fileManager.directoryExists(destination)) {
+      /*
+       * Create destination directory
+       * if it does not exist.
+       */
+      if (!fileManager.directoryExists(
+          destination
+      )) {
 
-        fileManager.createDirectory(destination);
+        fileManager.createDirectory(
+            destination
+        );
 
         log.info(
             "Directory created: {}",
@@ -209,13 +287,17 @@ public class Agent {
         );
       }
 
+      int movedCount = 0;
+
       for (Path file : files) {
 
         String fileName =
-            file.getFileName().toString();
+            file.getFileName()
+                .toString();
 
         String destinationPath =
-            destination + "/" + fileName;
+            destination + "/"
+                + fileName;
 
         fileManager.moveFile(
             fileName,
@@ -227,7 +309,17 @@ public class Agent {
             fileName,
             destinationPath
         );
+
+        movedCount++;
       }
+
+      return new AgentResult(
+          true,
+          "Moved "
+              + movedCount
+              + " file(s) matching "
+              + pattern
+      );
 
     } catch (IOException e) {
 
@@ -235,6 +327,49 @@ public class Agent {
           "Cannot move files matching: {}",
           pattern,
           e
+      );
+
+      return new AgentResult(
+          false,
+          "Cannot move files matching: "
+              + pattern
+      );
+    }
+  }
+
+  private AgentResult createDirectory(
+      String directoryName
+  ) {
+
+    try {
+
+      fileManager.createDirectory(
+          directoryName
+      );
+
+      log.info(
+          "Directory created: {}",
+          directoryName
+      );
+
+      return new AgentResult(
+          true,
+          "Directory created: "
+              + directoryName
+      );
+
+    } catch (IOException e) {
+
+      log.error(
+          "Cannot create directory: {}",
+          directoryName,
+          e
+      );
+
+      return new AgentResult(
+          false,
+          "Cannot create directory: "
+              + directoryName
       );
     }
   }

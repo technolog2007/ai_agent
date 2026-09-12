@@ -7,6 +7,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.Map;
 
 public class LlmClient {
 
@@ -20,7 +21,7 @@ public class LlmClient {
       You are a command parser for a local file management agent.
 
       Your ONLY task is to convert the user's request
-      into a JSON command.
+      into a command.
 
       Allowed actions:
 
@@ -29,69 +30,62 @@ public class LlmClient {
       MOVE
       MOVE_MATCHING
       CREATE_DIRECTORY
-
-      The response MUST have exactly this structure:
-
-      {
-        "action": "ACTION",
-        "source": "SOURCE_OR_NULL",
-        "destination": "DESTINATION_OR_NULL"
-      }
+      UNKNOWN
 
       Rules:
 
-      1. LIST:
-         source = null
-         destination = null
+      LIST:
+      source = null
+      destination = null
 
-      2. READ:
-         source = file name
-         destination = null
+      READ:
+      source = file name
+      destination = null
 
-      3. MOVE:
-         source = source file
-         destination = destination directory
+      MOVE:
+      source = source file
+      destination = destination directory
 
-      4. MOVE_MATCHING:
-         source = file pattern such as "*.jpg"
-         destination = directory
+      MOVE_MATCHING:
+      source = file pattern such as "*.jpg"
+      destination = directory
 
-      5. CREATE_DIRECTORY:
-         source = directory name
-         destination = null
+      CREATE_DIRECTORY:
+      source = directory name
+      destination = null
 
-        If the user's request cannot be mapped
-        to one of the allowed actions,
-        return:
-           
-        {
-          "action": "UNKNOWN",
-          "source": null,
-          "destination": null
-        }
-           
-        IMPORTANT:
-        Never convert an unsupported operation
-        into another allowed operation.
-           
-        For example:
-        - "delete test.txt" -> UNKNOWN
-        - "remove test.txt" -> UNKNOWN
-        - "send test.txt by email" -> UNKNOWN
-        - "open browser" -> UNKNOWN
-           
-        Do not interpret DELETE, REMOVE or ERASE
-        as READ.
+      If the request cannot be mapped to one
+      of the allowed actions, use UNKNOWN.
 
-      NEVER return explanations.
-      NEVER return markdown.
-      NEVER use ```json.
-      Return ONLY valid JSON.
+      Examples:
+
+      "покажи всі файли"
+      -> LIST
+
+      "прочитай test.txt"
+      -> READ, source = "test.txt"
+
+      "перемісти test.txt у Documents"
+      -> MOVE, source = "test.txt", destination = "Documents"
+
+      "перемісти всі jpg у Images"
+      -> MOVE_MATCHING, source = "*.jpg", destination = "Images"
+
+      "створи папку Documents"
+      -> CREATE_DIRECTORY, source = "Documents"
+
+      "видали test.txt"
+      -> UNKNOWN
+
+      "відправ test.txt електронною поштою"
+      -> UNKNOWN
       """;
+
   private final HttpClient httpClient;
   private final ObjectMapper objectMapper;
 
   public LlmClient() {
+
     this.httpClient =
         HttpClient.newHttpClient();
 
@@ -107,16 +101,18 @@ public class LlmClient {
             + "\nUser request:\n"
             + userRequest;
 
-    String json = """
-        {
-          "model": "%s",
-          "prompt": "%s",
-          "stream": false
-        }
-        """.formatted(
-        MODEL,
-        escapeJson(prompt)
-    );
+    Map<String, Object> requestBody =
+        Map.of(
+            "model", MODEL,
+            "prompt", prompt,
+            "stream", false,
+            "format", createSchema()
+        );
+
+    String json =
+        objectMapper.writeValueAsString(
+            requestBody
+        );
 
     HttpRequest request =
         HttpRequest.newBuilder()
@@ -138,6 +134,7 @@ public class LlmClient {
         );
 
     if (response.statusCode() != 200) {
+
       throw new IOException(
           "Ollama returned HTTP "
               + response.statusCode()
@@ -156,12 +153,47 @@ public class LlmClient {
         .asText();
   }
 
-  private String escapeJson(String text) {
+  private Map<String, Object> createSchema() {
 
-    return text
-        .replace("\\", "\\\\")
-        .replace("\"", "\\\"")
-        .replace("\n", "\\n")
-        .replace("\r", "\\r");
+    return Map.of(
+        "type", "object",
+
+        "properties", Map.of(
+
+            "action", Map.of(
+                "type", "string",
+                "enum", new String[]{
+                    "LIST",
+                    "READ",
+                    "MOVE",
+                    "MOVE_MATCHING",
+                    "CREATE_DIRECTORY",
+                    "UNKNOWN"
+                }
+            ),
+
+            "source", Map.of(
+                "type", new String[]{
+                    "string",
+                    "null"
+                }
+            ),
+
+            "destination", Map.of(
+                "type", new String[]{
+                    "string",
+                    "null"
+                }
+            )
+        ),
+
+        "required", new String[]{
+            "action",
+            "source",
+            "destination"
+        },
+
+        "additionalProperties", false
+    );
   }
 }

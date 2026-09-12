@@ -47,7 +47,7 @@ class CommandValidatorTest {
         new AgentCommand(
             Action.MOVE,
             "test.txt",
-            "Documents/test.txt"
+            "Documents"
         );
 
     assertDoesNotThrow(
@@ -165,6 +165,21 @@ class CommandValidatorTest {
         new AgentCommand(
             Action.MOVE_MATCHING,
             "*.jpg",
+            null
+        );
+
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> validator.validate(command)
+    );
+  }
+  @Test
+  void shouldRejectUnknownCommand() {
+
+    AgentCommand command =
+        new AgentCommand(
+            Action.UNKNOWN,
+            null,
             null
         );
 

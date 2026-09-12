@@ -49,6 +49,7 @@ public final class App {
 
       try {
 
+        // 1. Send user's request to LLM
         String llmResponse =
             llmClient.ask(input);
 
@@ -57,6 +58,7 @@ public final class App {
             llmResponse
         );
 
+        // 2. Convert JSON to AgentCommand
         AgentCommand command =
             commandParser.parse(
                 llmResponse
@@ -67,7 +69,15 @@ public final class App {
             command
         );
 
-        agent.execute(command);
+        // 3. Validate and execute command
+        AgentResult result =
+            agent.execute(command);
+
+        // 4. Show execution result
+        log.info(
+            "Agent result: {}",
+            result.message()
+        );
 
       } catch (Exception e) {
 
