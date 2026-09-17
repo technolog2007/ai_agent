@@ -1,5 +1,11 @@
 package com.example;
 
+import com.example.agent.Agent;
+import com.example.agent.AgentLoop;
+import com.example.command.CommandValidator;
+import com.example.filesystem.FileManager;
+import com.example.llm.LlmClient;
+import com.example.llm.LlmCommandParser;
 import java.nio.file.Path;
 import java.util.Scanner;
 import lombok.extern.slf4j.Slf4j;
@@ -33,6 +39,13 @@ public final class App {
     LlmCommandParser commandParser =
         new LlmCommandParser();
 
+    AgentLoop agentLoop =
+        new AgentLoop(
+            llmClient,
+            commandParser,
+            agent
+        );
+
     Scanner scanner =
         new Scanner(System.in);
 
@@ -47,45 +60,7 @@ public final class App {
         break;
       }
 
-      try {
-
-        // 1. Send user's request to LLM
-        String llmResponse =
-            llmClient.ask(input);
-
-        log.info(
-            "LLM response: {}",
-            llmResponse
-        );
-
-        // 2. Convert JSON to AgentCommand
-        AgentCommand command =
-            commandParser.parse(
-                llmResponse
-            );
-
-        log.info(
-            "Command: {}",
-            command
-        );
-
-        // 3. Validate and execute command
-        AgentResult result =
-            agent.execute(command);
-
-        // 4. Show execution result
-        log.info(
-            "Agent result: {}",
-            result.message()
-        );
-
-      } catch (Exception e) {
-
-        log.error(
-            "Cannot process command",
-            e
-        );
-      }
+      agentLoop.run(input);
     }
 
     scanner.close();

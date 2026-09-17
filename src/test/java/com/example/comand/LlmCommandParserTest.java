@@ -1,10 +1,17 @@
-package com.example;
+package com.example.comand;
 
-import org.junit.jupiter.api.Test;
-
+import static org.junit.Assert.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import com.example.agent.AgentDecision;
+import com.example.command.Action;
+import com.example.command.AgentCommand;
+import com.example.llm.LlmCommandParser;
+import org.junit.jupiter.api.Test;
 
 class LlmCommandParserTest {
 
@@ -18,12 +25,16 @@ class LlmCommandParserTest {
         {
           "action": "LIST",
           "source": null,
-          "destination": null
+          "destination": null,
+          "finished": false
         }
         """;
 
-    AgentCommand command =
+    AgentDecision decision =
         parser.parse(json);
+
+    AgentCommand command =
+        decision.command();
 
     assertEquals(
         Action.LIST,
@@ -32,6 +43,10 @@ class LlmCommandParserTest {
 
     assertNull(command.source());
     assertNull(command.destination());
+
+    assertFalse(
+        decision.finished()
+    );
   }
 
   @Test
@@ -41,12 +56,16 @@ class LlmCommandParserTest {
         {
           "action": "READ",
           "source": "test.txt",
-          "destination": null
+          "destination": null,
+          "finished": false
         }
         """;
 
-    AgentCommand command =
+    AgentDecision decision =
         parser.parse(json);
+
+    AgentCommand command =
+        decision.command();
 
     assertEquals(
         Action.READ,
@@ -59,6 +78,10 @@ class LlmCommandParserTest {
     );
 
     assertNull(command.destination());
+
+    assertFalse(
+        decision.finished()
+    );
   }
 
   @Test
@@ -68,12 +91,16 @@ class LlmCommandParserTest {
         {
           "action": "MOVE",
           "source": "test.txt",
-          "destination": "Documents"
+          "destination": "Documents",
+          "finished": false
         }
         """;
 
-    AgentCommand command =
+    AgentDecision decision =
         parser.parse(json);
+
+    AgentCommand command =
+        decision.command();
 
     assertEquals(
         Action.MOVE,
@@ -89,6 +116,10 @@ class LlmCommandParserTest {
         "Documents",
         command.destination()
     );
+
+    assertFalse(
+        decision.finished()
+    );
   }
 
   @Test
@@ -99,12 +130,16 @@ class LlmCommandParserTest {
         {
           "action": "MOVE_MATCHING",
           "source": "*.jpg",
-          "destination": "Images"
+          "destination": "Images",
+          "finished": false
         }
         """;
 
-    AgentCommand command =
+    AgentDecision decision =
         parser.parse(json);
+
+    AgentCommand command =
+        decision.command();
 
     assertEquals(
         Action.MOVE_MATCHING,
@@ -120,6 +155,10 @@ class LlmCommandParserTest {
         "Images",
         command.destination()
     );
+
+    assertFalse(
+        decision.finished()
+    );
   }
 
   @Test
@@ -130,12 +169,16 @@ class LlmCommandParserTest {
         {
           "action": "CREATE_DIRECTORY",
           "source": "Documents",
-          "destination": null
+          "destination": null,
+          "finished": false
         }
         """;
 
-    AgentCommand command =
+    AgentDecision decision =
         parser.parse(json);
+
+    AgentCommand command =
+        decision.command();
 
     assertEquals(
         Action.CREATE_DIRECTORY,
@@ -148,6 +191,29 @@ class LlmCommandParserTest {
     );
 
     assertNull(command.destination());
+
+    assertFalse(
+        decision.finished()
+    );
+  }
+
+  @Test
+  void shouldParseFinishedDecision() throws Exception {
+
+    String json = """
+      {
+        "action": null,
+        "source": null,
+        "destination": null,
+        "finished": true
+      }
+      """;
+
+    AgentDecision decision =
+        parser.parse(json);
+
+    assertTrue(decision.finished());
+    assertNull(decision.command());
   }
 
   @Test
@@ -158,33 +224,69 @@ class LlmCommandParserTest {
         {
           "action": "UNKNOWN",
           "source": null,
-          "destination": null
+          "destination": null,
+          "finished": false
         }
         """;
 
-    AgentCommand command =
+    AgentDecision decision =
         parser.parse(json);
 
     assertEquals(
         Action.UNKNOWN,
-        command.action()
+        decision.command().action()
+    );
+
+    assertFalse(
+        decision.finished()
     );
   }
 
   @Test
-  void shouldRejectUnsupportedAction()
-  {
+  void shouldRejectUnsupportedAction() {
+
     String json = """
         {
           "action": "DELETE",
           "source": "test.txt",
-          "destination": null
+          "destination": null,
+          "finished": false
         }
         """;
 
     assertThrows(
         IllegalArgumentException.class,
         () -> parser.parse(json)
+    );
+  }
+
+
+
+  @Test
+  void shouldConvertStringNullToNull() throws Exception {
+
+    String json = """
+      {
+        "action": "LIST",
+        "source": "null",
+        "destination": "null",
+        "finished": false
+      }
+      """;
+
+    AgentDecision decision =
+        parser.parse(json);
+
+    assertFalse(decision.finished());
+
+    assertNotNull(decision.command());
+
+    assertNull(
+        decision.command().source()
+    );
+
+    assertNull(
+        decision.command().destination()
     );
   }
 }

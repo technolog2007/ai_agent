@@ -1,5 +1,8 @@
-package com.example;
+package com.example.comand;
 
+import com.example.command.Action;
+import com.example.command.AgentCommand;
+import com.example.command.CommandValidator;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;

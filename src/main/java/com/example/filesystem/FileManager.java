@@ -1,4 +1,4 @@
-package com.example;
+package com.example.filesystem;
 
 import java.io.IOException;
 import java.nio.file.Files;

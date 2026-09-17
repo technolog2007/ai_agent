@@ -1,4 +1,4 @@
-package com.example;
+package com.example.command;
 
 public class CommandValidator {
 

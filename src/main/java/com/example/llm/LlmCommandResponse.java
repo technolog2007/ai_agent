@@ -1,8 +1,9 @@
-package com.example;
+package com.example.llm;
 
 public record LlmCommandResponse(
     String action,
     String source,
-    String destination
+    String destination,
+    boolean finished
 ) {
 }
