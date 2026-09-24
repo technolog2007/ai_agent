@@ -1,5 +1,6 @@
 package com.example.agent;
 
+import com.example.command.Action;
 import com.example.command.AgentCommand;
 import com.example.llm.LlmClient;
 import com.example.llm.LlmCommandParser;
@@ -28,145 +29,102 @@ public class AgentLoop {
 
     String previousResult = null;
 
-    for (int iteration = 1;
-        iteration <= MAX_ITERATIONS;
-        iteration++) {
+    for (int iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
 
       try {
 
-        log.info(
-            "Agent iteration: {}",
-            iteration
-        );
+        log.info("--- [Ітерація {}/{}] ---", iteration, MAX_ITERATIONS);
 
         // 1. Ask LLM
-        String llmResponse =
-            llmClient.ask(
-                userRequest,
-                previousResult
-            );
-
-        log.info(
-            "LLM response: {}",
-            llmResponse
-        );
+        String llmResponse = llmClient.ask(userRequest, previousResult);
+        log.info("<- Відповідь LLM (JSON): {}", llmResponse.replaceAll("\\s+", " "));
 
         // 2. Parse LLM response
-        AgentDecision decision =
-            commandParser.parse(
-                llmResponse
-            );
+        AgentDecision decision = commandParser.parse(llmResponse);
 
-        log.info(
-            "Decision: {}",
-            decision
-        );
-
-        // 3. Check whether task is finished
+        // 3. Check whether task is finished by LLM
         if (decision.finished()) {
-
-          log.info(
-              "Task finished."
-          );
-
+          log.info("✔ Задача успішно завершена (LLM finished).");
           return;
         }
 
-        // 4. Command must exist if task is not finished
-        AgentCommand command =
-            decision.command();
+        AgentCommand command = decision.command();
 
-        if (command == null) {
-
-          log.error(
-              "LLM returned finished=false but command is null"
-          );
-
+        if (command == null || command.action() == Action.UNKNOWN) {
+          log.warn("⚠ Невідома або непоSupported дія (UNKNOWN). Зупиняємо цикл.");
           return;
         }
 
-        log.info(
-            "Command: {}",
-            command
-        );
+        // Авто-коригування для CREATE_DIRECTORY
+        if (command.action() == Action.CREATE_DIRECTORY) {
+          String dirName = command.source();
 
-        // 5. Execute command
-        AgentResult result =
-            agent.execute(command);
-
-        if (result.success() && isTerminalCommand(command)) {
-
-          log.info("Task completed successfully.");
-
-          return;
+          // Якщо LLM переплутала поля і записала назву папки у destination, а файл у source
+          if (command.destination() != null && !command.destination().isBlank()) {
+            // Якщо source схожий на файл (має розширення), а destination ні — міняємо їх місцями
+            if (command.source() != null && command.source().contains(".")) {
+              dirName = command.destination();
+            }
+          }
+          command = new AgentCommand(Action.CREATE_DIRECTORY, dirName, null);
         }
 
-        log.info(
-            "Agent result: {}",
-            result.message()
-        );
+        // Авто-коригування для READ та LIST
+        if (command.action() == Action.READ || command.action() == Action.LIST) {
+          if (command.destination() != null) {
+            command = new AgentCommand(command.action(), command.source(), null);
+          }
+        }
+
+        // 4. Execute command
+        AgentResult result = agent.execute(command);
+
+        if (result.success()) {
+          log.info("✔ Результат файлової системи: {}", result.message());
+        } else {
+          log.warn("⚠ Помилка виконання: {}", result.message());
+          // Якщо сталася помилка виконання, припиняємо цикл
+          return;
+        }
 
         if (result.data() != null) {
-
-          log.info(
-              "Agent data:\n{}",
-              result.data()
-          );
+          log.info("📄 Данні:\n{}", result.data());
         }
 
-        // 6. Prepare execution result
-        //    for the next LLM iteration
-        previousResult =
-            """
-            Previous action:
-            %s
-  
-            Previous action parameters:
-            source = %s
-            destination = %s
-  
-            Execution result:
-            success = %s
-            message = %s
-  
-            Result data:
-            %s
+        // 5. Якщо дія була поодинокою (не багатокроковим запитом), завершуємо
+        if (!isMultiStepIntent(userRequest, command)) {
+          log.info("✔ Задача успішно завершена.");
+          return;
+        }
+
+        // 6. Формуємо результат для наступної ітерації (для багатокрокових запитів)
+        previousResult = """
+            Previous action: %s
+            Previous action parameters: source=%s, destination=%s
+            Execution result: success=%s, message=%s
+            Result data: %s
             """.formatted(
-                command.action(),
-                command.source(),
-                command.destination(),
-                result.success(),
-                result.message(),
-                result.data()
-            );
-
-      } catch (Exception e) {
-
-        log.error(
-            "Agent loop failed",
-            e
+            command.action(),
+            command.source(),
+            command.destination(),
+            result.success(),
+            result.message(),
+            result.data()
         );
 
+      } catch (Exception e) {
+        log.error("✖ Збій у циклі агента", e);
         return;
       }
     }
 
-    log.warn(
-        "Maximum number of agent iterations reached: {}",
-        MAX_ITERATIONS
-    );
+    log.warn("⚠ Досягнуто ліміт ітерацій ({})", MAX_ITERATIONS);
   }
 
-  private boolean isTerminalCommand(AgentCommand command) {
-
-    return switch (command.action()) {
-      case LIST,
-          READ,
-          MOVE,
-          MOVE_MATCHING,
-          CREATE_DIRECTORY -> true;
-
-      case UNKNOWN -> false;
-    };
+  private boolean isMultiStepIntent(String userRequest, AgentCommand lastCommand) {
+    String lower = userRequest.toLowerCase();
+    // Якщо запит містить сполучники "та", "і", "а потім" і перша дія була CREATE_DIRECTORY — це multi-step
+    boolean hasAnd = lower.contains(" та ") || lower.contains(" і ") || lower.contains(" а потім ");
+    return hasAnd && lastCommand.action() == Action.CREATE_DIRECTORY;
   }
 }

@@ -3,112 +3,59 @@ package com.example.llm;
 import com.example.agent.AgentDecision;
 import com.example.command.Action;
 import com.example.command.AgentCommand;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 public class LlmCommandParser {
 
-  private final ObjectMapper objectMapper;
+  private final ObjectMapper objectMapper = new ObjectMapper();
 
-  public LlmCommandParser() {
-    this.objectMapper = new ObjectMapper();
-  }
-
-  public AgentDecision parse(String json)
-      throws Exception {
-
-    LlmCommandResponse response =
-        objectMapper.readValue(
-            json,
-            LlmCommandResponse.class
-        );
-
-    /*
-     * Якщо LLM повідомила,
-     * що задача завершена,
-     * команда нам більше не потрібна.
-     */
-    if (response.finished()) {
-
-      return new AgentDecision(
-          null,
-          true
-      );
-    }
-
-    /*
-     * Якщо задача НЕ завершена,
-     * action обов'язково повинен бути присутній.
-     */
-    if (isBlank(response.action())) {
-
-      throw new IllegalArgumentException(
-          "LLM did not provide an action"
-      );
-    }
-
-    Action action;
-
+  public AgentDecision parse(String jsonResponse) {
     try {
+      JsonNode node = objectMapper.readTree(jsonResponse);
 
-      action =
-          Action.valueOf(
-              response.action()
-                  .toUpperCase()
-          );
+      String actionStr = node.has("action") && !node.get("action").isNull()
+          ? node.get("action").asText()
+          : null;
 
+      String source = node.has("source") && !node.get("source").isNull()
+          ? node.get("source").asText()
+          : null;
+
+      String destination = node.has("destination") && !node.get("destination").isNull()
+          ? node.get("destination").asText()
+          : null;
+
+      Action action = parseActionSafely(actionStr);
+
+      // Якщо дія null або UNKNOWN — спираємося на поле finished
+      boolean finished = node.has("finished") && node.get("finished").asBoolean();
+
+      // Захист: якщо є реальна дія для виконання, прапорець finished НЕ може бути true
+      if (action != null && action != Action.UNKNOWN) {
+        finished = false;
+      }
+
+      AgentCommand command = new AgentCommand(action, source, destination);
+      return new AgentDecision(command, finished);
+
+    } catch (Exception e) {
+      log.error("Помилка парсингу JSON від LLM: {}", jsonResponse, e);
+      return new AgentDecision(new AgentCommand(Action.UNKNOWN, null, null), false);
+    }
+  }
+
+  private Action parseActionSafely(String actionStr) {
+    if (actionStr == null || actionStr.isBlank()) {
+      return null;
+    }
+    try {
+      return Action.valueOf(actionStr.toUpperCase());
     } catch (IllegalArgumentException e) {
-
-      throw new IllegalArgumentException(
-          "LLM returned unsupported action: "
-              + response.action(),
-          e
-      );
+      log.warn("⚠ LLM повернула непідтримувану дію: '{}', заміна на UNKNOWN", actionStr);
+      return Action.UNKNOWN;
     }
-
-    /*
-     * LLM може повернути:
-     *
-     * "null"
-     *
-     * замість:
-     *
-     * null
-     *
-     * Нормалізуємо це до Java null.
-     */
-    String source =
-        normalizeNull(response.source());
-
-    String destination =
-        normalizeNull(response.destination());
-
-    AgentCommand command =
-        new AgentCommand(
-            action,
-            source,
-            destination
-        );
-
-    return new AgentDecision(
-        command,
-        false
-    );
-  }
-
-  private String normalizeNull(String value) {
-
-    if (value == null) {
-      return null;
-    }
-
-    if (value.equalsIgnoreCase("null")) {
-      return null;
-    }
-
-    return value;
-  }
-
-  private boolean isBlank(String value) {
-    return value == null || value.isBlank();
   }
 }
